@@ -52,6 +52,11 @@ _FRAMEWORK_DECORATOR_PATTERNS: list[re.Pattern[str]] = [
     # JS/TS frameworks
     re.compile(r"(Component|Injectable|Controller|Module|Guard|Pipe)", re.IGNORECASE),
     re.compile(r"(Subscribe|Mutation|Query|Resolver)", re.IGNORECASE),
+    # NestJS HTTP method decorators (@Get, @Post, ... — bare, no "Mapping" suffix).
+    # Spring uses the "...Mapping" form above; NestJS uses the bare verb.
+    re.compile(r"^@?(Get|Post|Put|Delete|Patch|Options|Head|All|Sse)(\(|$)"),
+    # NestJS lifecycle / DI / messaging decorators
+    re.compile(r"(UseGuards|UseInterceptors|UsePipes|UseFilters|Cron|MessagePattern|EventPattern)", re.IGNORECASE),
     # Express / Koa / Hono route handlers
     re.compile(r"(app|router)\.(get|post|put|delete|patch|use|all)\b"),
     # Android lifecycle
@@ -107,6 +112,13 @@ _ENTRY_NAME_PATTERNS: list[re.Pattern[str]] = [
         r"^(componentDidMount|componentDidUpdate|componentWillUnmount"
         r"|shouldComponentUpdate|render)$"
     ),
+    # Go: net/http handler interface + Gin/Echo/Fiber handler conventions.
+    # Go has no decorators, so handlers are detected by name convention
+    # (PascalCase/camelCase ending in Handler/Handle) plus the standard
+    # ServeHTTP interface method.
+    re.compile(r"^ServeHTTP$"),
+    re.compile(r"[A-Za-z](Handler|Handle)$"),
+    re.compile(r"^(Init|Setup|Register|Configure)Routes?$"),
 ]
 
 
