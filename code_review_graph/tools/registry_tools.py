@@ -123,3 +123,39 @@ def cross_repo_search_func(
         }
     except Exception as exc:
         return {"status": "error", "error": str(exc)}
+
+
+def cross_repo_impact_func(
+    symbol: str,
+    repo_root: str | None = None,
+    limit_per_repo: int = 10,
+) -> dict[str, Any]:
+    """Find registered repos that depend on a symbol changed in this repo.
+
+    [REGISTRY] On-demand, name-based cross-repo impact. For a symbol changed
+    in the source repo, scans every OTHER registered repo's graph for
+    IMPORTS_FROM / CALLS edges targeting that symbol name. No persisted
+    cross-repo edges (preserves zero-index design).
+
+    Args:
+        symbol: Symbol name (bare or qualified) that changed.
+        repo_root: Source repo path (auto-detected if omitted).
+        limit_per_repo: Max matches reported per dependent repo.
+
+    Returns:
+        Dict with dependents list and repos_scanned count.
+    """
+    from pathlib import Path as _Path
+    from ..cross_repo import find_cross_repo_dependents
+    from ..registry import Registry
+
+    try:
+        registry = Registry()
+        source = str(_Path(repo_root).resolve()) if repo_root else str(_Path.cwd().resolve())
+        result = find_cross_repo_dependents(
+            symbol, source, registry, limit_per_repo=limit_per_repo
+        )
+        result["status"] = "ok"
+        return result
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}

@@ -29,6 +29,7 @@ from .prompts import (
 from .tools import (
     apply_refactor_func,
     build_or_update_graph,
+    cross_repo_impact_func,
     cross_repo_search_func,
     detect_changes_func,
     embed_graph,
@@ -891,6 +892,31 @@ def cross_repo_search_tool(
         limit: Maximum results per repo. Default: 20.
     """
     return cross_repo_search_func(query=query, kind=kind, limit=limit)
+
+
+@mcp.tool()
+def cross_repo_impact_tool(
+    symbol: str,
+    repo_root: Optional[str] = None,
+    limit_per_repo: int = 10,
+) -> dict:
+    """Find registered repos that depend on a symbol changed in this repo.
+
+    On-demand, name-based cross-repo impact analysis. For a symbol changed
+    in the source repo, scans every OTHER registered repo's graph for
+    IMPORTS_FROM / CALLS edges targeting that symbol name. No persisted
+    cross-repo edges. Register repos first with the CLI 'register' command.
+
+    Args:
+        symbol: Symbol name (bare or qualified) that changed, e.g. "getUserById".
+        repo_root: Source repo path (auto-detected if omitted).
+        limit_per_repo: Max matches reported per dependent repo. Default: 10.
+    """
+    return cross_repo_impact_func(
+        symbol=symbol,
+        repo_root=_resolve_repo_root(repo_root),
+        limit_per_repo=limit_per_repo,
+    )
 
 
 @mcp.prompt()
