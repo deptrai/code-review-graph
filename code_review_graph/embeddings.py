@@ -847,6 +847,14 @@ def _node_to_text(node: GraphNode) -> str:
     if node.language:
         parts.append(node.language)
 
+    # 9. Body preview (v2.4.1) — richer semantic signal than signature alone.
+    # First 500 chars, newlines collapsed, only for code-bearing nodes.
+    body = getattr(node, "body", None)
+    if body:
+        preview = " ".join(body[:500].split())
+        if preview:
+            parts.append(preview)
+
     return " ".join(parts)
 
 

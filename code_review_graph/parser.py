@@ -62,6 +62,7 @@ class NodeInfo:
     return_type: Optional[str] = None
     modifiers: Optional[str] = None
     is_test: bool = False
+    body: Optional[str] = None  # raw source body (functions/classes), truncated
     extra: dict = field(default_factory=dict)
 
 
@@ -1041,6 +1042,27 @@ class CodeParser:
                         file_path=edge.file_path,
                         line=edge.line,
                     ))
+
+        # --- Populate node bodies centrally (v2.4.1 body indexing) ---
+        # Done once here using line ranges so we don't touch ~19 NodeInfo
+        # construction sites. Only code-bearing nodes get a body; File/Type
+        # nodes are skipped. Bodies are truncated to 2000 chars.
+        _BODY_KINDS = {"Function", "Class", "Test"}
+        if nodes:
+            src_lines = source.split(b"\n")
+            for n in nodes:
+                if n.kind not in _BODY_KINDS or n.body is not None:
+                    continue
+                if not n.line_start or not n.line_end:
+                    continue
+                # line numbers are 1-indexed, inclusive
+                start = max(n.line_start - 1, 0)
+                end = min(n.line_end, len(src_lines))
+                if start >= end:
+                    continue
+                raw = b"\n".join(src_lines[start:end])
+                text = raw.decode("utf-8", errors="replace")
+                n.body = text[:2000]
 
         return nodes, edges
 

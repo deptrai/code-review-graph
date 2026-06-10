@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS nodes (
     is_test INTEGER DEFAULT 0,
     file_hash TEXT,
     extra TEXT DEFAULT '{}',
+    body TEXT,
     updated_at REAL NOT NULL
 );
 
@@ -95,6 +96,7 @@ class GraphNode:
     is_test: bool
     file_hash: Optional[str]
     extra: dict
+    body: Optional[str] = None
 
 
 @dataclass
@@ -196,8 +198,8 @@ class GraphStore:
             """INSERT INTO nodes
                (kind, name, qualified_name, file_path, line_start, line_end,
                 language, parent_name, params, return_type, modifiers, is_test,
-                file_hash, extra, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                file_hash, extra, body, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(qualified_name) DO UPDATE SET
                  kind=excluded.kind, name=excluded.name,
                  file_path=excluded.file_path, line_start=excluded.line_start,
@@ -205,14 +207,15 @@ class GraphStore:
                  parent_name=excluded.parent_name, params=excluded.params,
                  return_type=excluded.return_type, modifiers=excluded.modifiers,
                  is_test=excluded.is_test, file_hash=excluded.file_hash,
-                 extra=excluded.extra, updated_at=excluded.updated_at
+                 extra=excluded.extra, body=excluded.body,
+                 updated_at=excluded.updated_at
             """,
             (
                 node.kind, node.name, qualified, node.file_path,
                 node.line_start, node.line_end, node.language,
                 node.parent_name, node.params, node.return_type,
                 node.modifiers, int(node.is_test), file_hash,
-                extra, now,
+                extra, getattr(node, "body", None), now,
             ),
         )
         row = self._conn.execute(
@@ -1387,6 +1390,7 @@ class GraphStore:
             is_test=bool(row["is_test"]),
             file_hash=row["file_hash"],
             extra=json.loads(row["extra"]) if row["extra"] else {},
+            body=row["body"] if "body" in row.keys() else None,
         )
 
     def _row_to_edge(self, row: sqlite3.Row) -> GraphEdge:
