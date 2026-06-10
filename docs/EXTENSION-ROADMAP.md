@@ -1,8 +1,19 @@
 # Extension Roadmap — chainlens/code-review-graph fork
 
 ## Upstream base: tirth8205/code-review-graph v2.3.6 (schema v9)
+## Fork version: 2.5.0 (schema v11)
 ## Branch: develop
 ## Path: /Users/luisphan/Documents/chainlens/code-review-graph
+
+## Status (2026-06-10)
+- ✅ Phase 1 (v2.4.0): Git lineage — churn, co-change, hotspots, authors
+- ✅ Phase 2 (v2.4.1): Body indexing — full code bodies in embeddings
+- ✅ Phase 3 (v2.4.2): Search quality — camelCase/snake FTS tokenization
+- ✅ Phase 4 (v2.4.3): NestJS + Go flow detection (+ parser decorator fix)
+- ✅ Phase 5 (v2.5.0): Cross-repo dependency impact (name-based, on-demand)
+
+All phases e2e-tested. 2 pre-existing bugs found+fixed via real-repo testing:
+lineage co-change path matching, parser decorator persistence.
 
 ---
 
