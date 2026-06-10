@@ -178,6 +178,46 @@ def rrf_merge(*result_lists: list[tuple[int, float]], k: int = 60) -> list[tuple
 # ---------------------------------------------------------------------------
 
 
+def _build_fts_query(query: str) -> str:
+    """Build an FTS5 MATCH expression from a natural-language query.
+
+    Splits the query into terms, expands camelCase/snake_case/dotted
+    identifiers into their component words, and OR-joins everything so
+    partial matches rank rather than requiring the whole phrase. Each term
+    is double-quoted to neutralise FTS5 operators.
+
+    Example: "getUserById auth" ->
+        "getuserbyid" OR "get" OR "user" OR "by" OR "id" OR "auth"
+    """
+    import re as _re
+
+    raw_terms = _re.findall(r"[A-Za-z0-9_.]+", query)
+    expanded: list[str] = []
+    seen: set[str] = set()
+
+    def _add(tok: str) -> None:
+        lo = tok.lower().strip()
+        if lo and lo not in seen:
+            seen.add(lo)
+            expanded.append(lo)
+
+    for term in raw_terms:
+        _add(term)
+        # snake_case / dotted -> components
+        for part in _re.split(r"[_.]+", term):
+            if part:
+                _add(part)
+        # camelCase / PascalCase -> component words
+        camel = _re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", term)
+        for part in camel.split():
+            _add(part)
+
+    if not expanded:
+        return '"' + query.replace('"', '""') + '"'
+
+    return " OR ".join('"' + t.replace('"', '""') + '"' for t in expanded)
+
+
 def _fts_search(
     conn: sqlite3.Connection,
     query: str,
@@ -187,25 +227,35 @@ def _fts_search(
 
     Returns list of ``(node_id, bm25_score)`` tuples. The BM25 score is
     negated so higher = better (FTS5 returns negative BM25).
+
+    The query is tokenized (camelCase/snake_case/dotted split, OR-joined)
+    so natural-language queries and identifier fragments both match instead
+    of requiring the whole phrase. See ``_build_fts_query``.
     """
-    # Sanitize: wrap in double quotes to prevent FTS5 operator injection
-    safe_query = '"' + query.replace('"', '""') + '"'
+    match_expr = _build_fts_query(query)
 
     try:
         rows = conn.execute(
             "SELECT rowid, rank FROM nodes_fts WHERE nodes_fts MATCH ? "
             "ORDER BY rank LIMIT ?",
-            (safe_query, limit),
+            (match_expr, limit),
         ).fetchall()
         # FTS5 rank is negative BM25 (lower = better), negate for consistency
         return [(row[0], -row[1]) for row in rows]
     except sqlite3.OperationalError as e:
         logger.warning("FTS5 search failed: %s", e)
-        return []
-
-
-# ---------------------------------------------------------------------------
-# Embedding search (optional)
+        # Fallback: whole-phrase quoted query (old behavior)
+        safe_query = '"' + query.replace('"', '""') + '"'
+        try:
+            rows = conn.execute(
+                "SELECT rowid, rank FROM nodes_fts WHERE nodes_fts MATCH ? "
+                "ORDER BY rank LIMIT ?",
+                (safe_query, limit),
+            ).fetchall()
+            return [(row[0], -row[1]) for row in rows]
+        except sqlite3.OperationalError as e2:
+            logger.warning("FTS5 fallback search failed: %s", e2)
+            return []
 # ---------------------------------------------------------------------------
 
 
