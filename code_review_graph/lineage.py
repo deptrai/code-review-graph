@@ -158,7 +158,17 @@ def compute_co_changes(
     if not log_out.strip():
         return {}
 
-    files_set = set(files)
+    # git log emits paths relative to repo root; store paths may be absolute.
+    # Build a rel->orig map so we can match git output and return original paths.
+    rel_to_orig: dict[str, str] = {}
+    for f in files:
+        try:
+            rel = str(Path(f).resolve().relative_to(repo_root.resolve()))
+        except ValueError:
+            rel = f  # already relative or outside repo
+        rel_to_orig[rel] = f
+    files_set = set(rel_to_orig.keys())
+
     # Parse commits: group files per commit SHA
     commits: list[list[str]] = []
     current: list[str] = []
@@ -193,8 +203,11 @@ def compute_co_changes(
                 if fa != fb:
                     co_counts[fa][fb] += 1
 
+    # Map relative paths back to original (absolute) paths for caller consistency.
     return {
-        fp: [f for f, _ in counter.most_common(max_per_file)]
+        rel_to_orig[fp]: [
+            rel_to_orig[f] for f, _ in counter.most_common(max_per_file)
+        ]
         for fp, counter in co_counts.items()
     }
 
