@@ -4434,6 +4434,20 @@ class CodeParser:
                     inner = inner[:-1]
                 deco_list.append(inner.strip())
                 sib = sib.prev_sibling
+        # TS/JS: decorators (@Get(), @UseGuards(...)) are `decorator` nodes,
+        # either preceding siblings of the method/class or children of it.
+        if language in ("typescript", "tsx", "javascript", "jsx"):
+            # Preceding siblings (class methods, exported classes)
+            sib = child.prev_sibling
+            while sib is not None and sib.type == "decorator":
+                text = sib.text.decode("utf-8", errors="replace").strip()
+                deco_list.append(text.lstrip("@").strip())
+                sib = sib.prev_sibling
+            # Child decorators (some grammar versions nest them)
+            for sub in child.children:
+                if sub.type == "decorator":
+                    text = sub.text.decode("utf-8", errors="replace").strip()
+                    deco_list.append(text.lstrip("@").strip())
         if deco_list:
             decorators = tuple(deco_list)
 
@@ -4455,6 +4469,10 @@ class CodeParser:
 
         # Java: detect Temporal method-level annotations and Kafka listeners
         method_extra: dict = {}
+        # Store decorators/annotations so flow detection (and other consumers)
+        # can match framework patterns (NestJS @Get, Spring @GetMapping, etc.).
+        if deco_list:
+            method_extra["decorators"] = list(deco_list)
         if language == "java" and deco_list:
             temporal_method_annots = [
                 a for a in deco_list if a in _TEMPORAL_METHOD_ANNOTATIONS
