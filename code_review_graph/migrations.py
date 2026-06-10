@@ -264,6 +264,14 @@ def _migrate_v10(conn: sqlite3.Connection) -> None:
     """)
     logger.info("Migration v10: created git_lineage table")
 
+
+def _migrate_v11(conn: sqlite3.Connection) -> None:
+    """v11: Add body column to nodes for full-text + richer embeddings."""
+    if not _has_column(conn, "nodes", "body"):
+        conn.execute("ALTER TABLE nodes ADD COLUMN body TEXT")
+    logger.info("Migration v11: added nodes.body column")
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     2: _migrate_v2,
     3: _migrate_v3,
@@ -274,6 +282,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     8: _migrate_v8,
     9: _migrate_v9,
     10: _migrate_v10,
+    11: _migrate_v11,
 }
 
 LATEST_VERSION = max(MIGRATIONS.keys())
