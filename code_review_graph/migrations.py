@@ -41,7 +41,7 @@ def _set_schema_version(conn: sqlite3.Connection, version: int) -> None:
 
 _KNOWN_TABLES = frozenset({
     "nodes", "edges", "metadata", "communities", "flows", "flow_memberships", "nodes_fts",
-    "community_summaries", "flow_snapshots", "risk_index",
+    "community_summaries", "flow_snapshots", "risk_index", "git_lineage",
 })
 
 
@@ -242,6 +242,28 @@ def _migrate_v9(conn: sqlite3.Connection) -> None:
 # Migration registry
 # ---------------------------------------------------------------------------
 
+
+def _migrate_v10(conn: sqlite3.Connection) -> None:
+    """v10: Add git_lineage table for churn + co-change tracking."""
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS git_lineage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_path TEXT NOT NULL UNIQUE,
+            commit_count INTEGER DEFAULT 0,
+            churn_90d INTEGER DEFAULT 0,
+            last_commit_sha TEXT,
+            last_commit_at REAL,
+            authors TEXT DEFAULT '[]',
+            co_changed_files TEXT DEFAULT '[]',
+            updated_at REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_lineage_file
+            ON git_lineage(file_path);
+        CREATE INDEX IF NOT EXISTS idx_lineage_churn
+            ON git_lineage(churn_90d DESC);
+    """)
+    logger.info("Migration v10: created git_lineage table")
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     2: _migrate_v2,
     3: _migrate_v3,
@@ -251,6 +273,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     7: _migrate_v7,
     8: _migrate_v8,
     9: _migrate_v9,
+    10: _migrate_v10,
 }
 
 LATEST_VERSION = max(MIGRATIONS.keys())

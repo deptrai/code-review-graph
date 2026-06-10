@@ -225,6 +225,7 @@ def compute_risk_score(store: GraphStore, node: GraphNode) -> float:
       - Test coverage: 0.30 (untested) scaling down to 0.05 (5+ TESTED_BY edges)
       - Security sensitivity: 0.20 if name matches security keywords
       - Caller count: callers / 20, capped at 0.10
+      - Git churn (v2.4.0): churn_90d / 20, capped at 0.15
     """
     score = 0.0
 
@@ -265,6 +266,15 @@ def compute_risk_score(store: GraphStore, node: GraphNode) -> float:
     # --- Caller count (cap 0.10) ---
     caller_count = len(caller_edges)
     score += min(caller_count / 20.0, 0.10)
+
+    # --- Git churn signal (cap 0.15) — uses lineage table if available ---
+    try:
+        lineage = store.get_file_lineage(node.file_path)
+        if lineage and lineage.get("churn_90d", 0) > 0:
+            churn_score = min(lineage["churn_90d"] / 20.0, 1.0) * 0.15
+            score += churn_score
+    except Exception:
+        pass  # lineage table not yet built — degrade gracefully
 
     return round(min(max(score, 0.0), 1.0), 4)
 

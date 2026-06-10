@@ -562,6 +562,77 @@ class GraphStore:
         ).fetchall()
         return [r["file_path"] for r in rows]
 
+    def upsert_file_lineage(self, lineage: object) -> None:
+        """Insert or update git lineage data for a file (requires migration v10)."""
+        import json as _json
+        now = time.time()
+        self._conn.execute(
+            """INSERT INTO git_lineage
+               (file_path, commit_count, churn_90d, last_commit_sha, last_commit_at,
+                authors, co_changed_files, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(file_path) DO UPDATE SET
+                 commit_count=excluded.commit_count,
+                 churn_90d=excluded.churn_90d,
+                 last_commit_sha=excluded.last_commit_sha,
+                 last_commit_at=excluded.last_commit_at,
+                 authors=excluded.authors,
+                 co_changed_files=excluded.co_changed_files,
+                 updated_at=excluded.updated_at
+            """,
+            (
+                lineage.file_path,
+                lineage.commit_count,
+                lineage.churn_90d,
+                lineage.last_commit_sha,
+                lineage.last_commit_at,
+                _json.dumps(lineage.authors),
+                _json.dumps(lineage.co_changed_files),
+                now,
+            ),
+        )
+        self._conn.commit()
+
+    def get_file_lineage(self, file_path: str) -> dict | None:
+        """Return git lineage dict for a file, or None if not indexed."""
+        import json as _json
+        try:
+            row = self._conn.execute(
+                "SELECT * FROM git_lineage WHERE file_path = ?", (file_path,)
+            ).fetchone()
+        except Exception:
+            return None
+        if not row:
+            return None
+        return {
+            "file_path": row["file_path"],
+            "commit_count": row["commit_count"],
+            "churn_90d": row["churn_90d"],
+            "last_commit_sha": row["last_commit_sha"],
+            "last_commit_at": row["last_commit_at"],
+            "authors": _json.loads(row["authors"] or "[]"),
+            "co_changed_files": _json.loads(row["co_changed_files"] or "[]"),
+        }
+
+    def get_hotspot_files(self, limit: int = 20) -> list[dict]:
+        """Return files with highest churn_90d (most changed in last 90 days)."""
+        import json as _json
+        try:
+            rows = self._conn.execute(
+                "SELECT * FROM git_lineage ORDER BY churn_90d DESC LIMIT ?", (limit,)
+            ).fetchall()
+        except Exception:
+            return []
+        return [
+            {
+                "file_path": r["file_path"],
+                "churn_90d": r["churn_90d"],
+                "commit_count": r["commit_count"],
+                "authors": _json.loads(r["authors"] or "[]"),
+            }
+            for r in rows
+        ]
+
     def search_nodes(self, query: str, limit: int = 20) -> list[GraphNode]:
         """Keyword search across node names.
 

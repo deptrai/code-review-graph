@@ -58,6 +58,11 @@ from .tools import (
     semantic_search_nodes,
     traverse_graph_func,
 )
+from .tools.lineage_tools import (
+    build_lineage_index_func,
+    get_file_lineage_func,
+    get_hotspot_files_func,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1073,6 +1078,72 @@ def main(
     finally:
         if watch_store is not None:
             watch_store.close()
+
+
+# ─── Lineage tools (Phase 1, v2.4.0) ──────────────────────────────────────
+
+
+@mcp.tool()
+async def build_lineage_index_tool(
+    repo_root: Optional[str] = None,
+    days: int = 90,
+) -> dict:
+    """Build or rebuild the git lineage index (churn + co-change patterns).
+
+    Mines git history to populate churn, co-change patterns, and author
+    data for all tracked files. Typically takes 5-30 seconds.
+    Run once after building the graph; re-run after major git history changes.
+
+    Args:
+        repo_root: Repository root path (auto-detected if omitted).
+        days: Churn window in days (default 90).
+    """
+    return build_lineage_index_func(
+        repo_root=_resolve_repo_root(repo_root),
+        days=days,
+    )
+
+
+@mcp.tool()
+async def get_file_lineage_tool(
+    file_path: str,
+    repo_root: Optional[str] = None,
+) -> dict:
+    """Get git history summary for a specific file.
+
+    Returns commit count, churn in last 90 days, top authors, and files
+    frequently changed together (co-change patterns). Useful for assessing
+    risk before modifying a file.
+
+    Args:
+        file_path: Relative file path (e.g. src/auth.py).
+        repo_root: Repository root path (auto-detected if omitted).
+    """
+    return get_file_lineage_func(
+        file_path=file_path,
+        repo_root=_resolve_repo_root(repo_root),
+    )
+
+
+@mcp.tool()
+async def get_hotspot_files_tool(
+    limit: int = 20,
+    repo_root: Optional[str] = None,
+) -> dict:
+    """Return files with highest commit churn in the last 90 days.
+
+    High-churn files are frequently modified and carry elevated risk:
+    more likely to have bugs introduced and merge conflicts.
+    Use alongside detect_changes_tool for risk-prioritised reviews.
+
+    Args:
+        limit: Maximum files to return (default 20).
+        repo_root: Repository root path (auto-detected if omitted).
+    """
+    return get_hotspot_files_func(
+        limit=limit,
+        repo_root=_resolve_repo_root(repo_root),
+    )
 
 
 if __name__ == "__main__":
