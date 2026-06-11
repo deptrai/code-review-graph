@@ -443,6 +443,11 @@ def hybrid_search(
             node_rows[row["id"]] = row
 
     # Apply boosting
+    # Dampen Test nodes unless the query explicitly asks for tests — prevents
+    # test-heavy repos (express: 98% test nodes) from drowning source results.
+    _TEST_KEYWORDS = {"test", "tests", "spec", "specs", "testing", "coverage"}
+    query_wants_tests = bool(_TEST_KEYWORDS & set(query.lower().split()))
+
     boosted: list[tuple[int, float]] = []
     for node_id, score in merged:
         row = node_rows.get(node_id)
@@ -454,6 +459,15 @@ def hybrid_search(
         qualified_name = row["qualified_name"]
 
         boost = 1.0
+        # Dampen test nodes when the query is not test-oriented
+        if not query_wants_tests and node_kind == "Test":
+            boost *= 0.3
+        # Dampen non-Test functions that live in test directories — these are
+        # helper/fixture functions (e.g. createApp) that pollute source search.
+        if not query_wants_tests and node_kind != "Test" and file_path:
+            fp_lower = file_path.lower()
+            if "/test/" in fp_lower or "/tests/" in fp_lower or "/spec/" in fp_lower:
+                boost *= 0.4
         if node_kind in kind_boosts:
             boost *= kind_boosts[node_kind]
         if "_qualified" in kind_boosts and '.' in query:
