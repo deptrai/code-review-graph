@@ -34,7 +34,7 @@ multi_hop_tasks:
     expected_neighbor_names: ["__init__"]
     k: 10
   - id: fastapi-get-dependant-callers
-    nl_query: "Where fastapi resolves dependency declarations into a tree"
+    nl_query: "How get_dependant builds the dependency tree from function parameters"
     anchor_qualified_suffix: "fastapi/dependencies/utils.py::get_dependant"
     traversal_pattern: callers_of
     expected_neighbor_names: ["get_parameterless_sub_dependant", "solve_dependencies"]

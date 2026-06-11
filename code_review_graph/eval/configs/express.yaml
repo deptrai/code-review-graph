@@ -31,7 +31,7 @@ search_queries:
 # edges in the graph. createApplication is the cleanest anchor.
 multi_hop_tasks:
   - id: express-create-application-callees
-    nl_query: "What express does when constructing an application"
+    nl_query: "How createApplication in express.js initializes the app object"
     anchor_qualified_suffix: "lib/express.js::createapplication"
     traversal_pattern: callees_of
     expected_neighbor_names: ["mixin", "create", "init"]

@@ -34,7 +34,7 @@ multi_hop_tasks:
     expected_neighbor_names: ["get", "options", "head", "post", "put", "patch"]
     k: 10
   - id: httpx-async-request-tests
-    nl_query: "Tests covering the httpx async client request method"
+    nl_query: "The AsyncClient.request method that sends async HTTP requests"
     anchor_qualified_suffix: "httpx/_client.py::asyncclient.request"
     traversal_pattern: callers_of
     expected_neighbor_names: ["test_raise_for_status"]
