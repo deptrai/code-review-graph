@@ -387,7 +387,12 @@ def hybrid_search(
     # because those operate on the FTS virtual table or need raw Row
     # access for batch-fetch performance.  This is documented coupling.
     conn = store._conn
-    fetch_limit = limit * 3  # Fetch extra to allow for filtering and boosting
+    # Fetch extra to allow for filtering and boosting. Floor at 50 so that
+    # small caller limits (e.g. limit=10) still gather a candidate pool deep
+    # enough for RRF fusion to surface mid-ranked nodes — without the floor a
+    # node ranked ~6 in each channel could fall out of the merged top-K purely
+    # because the per-channel pool (limit*3=30) was too shallow.
+    fetch_limit = max(limit * 3, 50)
 
     # ------ Phase 1: Gather ranked lists ------
     fts_results: list[tuple[int, float]] = []
