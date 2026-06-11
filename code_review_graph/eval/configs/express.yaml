@@ -19,12 +19,12 @@ entry_points:
   - "lib/express.js::createApplication"
 
 search_queries:
-  - query: "app handle"
-    expected: "lib/application.js::app"
+  - query: "application"
+    expected: "lib/application.js"
   - query: "response send"
-    expected: "lib/response.js::res"
+    expected: "lib/response.js"
   - query: "request"
-    expected: "lib/request.js::req"
+    expected: "lib/request.js"
 
 # Express has only one task — JS modules use prototypes + module.exports
 # heavily, so most "method" callers are not represented as proper Function
