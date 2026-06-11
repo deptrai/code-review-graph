@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple, Optional
 
+import tree_sitter
 import tree_sitter_language_pack as tslp
 
 from .custom_languages import CustomLanguage, load_custom_languages
@@ -845,7 +846,7 @@ class CodeParser:
             custom = self._custom_languages.get(language)
             grammar = custom.grammar if custom is not None else language
             try:
-                self._parsers[language] = tslp.get_parser(grammar)  # type: ignore[arg-type]
+                self._parsers[language] = tree_sitter.Parser(tslp.get_language(grammar))  # type: ignore[arg-type]
             except (LookupError, ValueError, ImportError) as exc:
                 # language not packaged, or grammar load failed
                 logger.debug("tree-sitter parser unavailable for %s: %s", language, exc)
