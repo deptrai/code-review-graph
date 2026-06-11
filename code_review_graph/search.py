@@ -17,6 +17,30 @@ from .graph import GraphStore, _sanitize_name
 logger = logging.getLogger(__name__)
 
 
+# Test-orientation detection: queries containing any of these tokens are
+# treated as explicitly test-seeking, so test nodes are NOT dampened.
+# "coverage" is intentionally excluded — it appears in non-test contexts
+# ("API coverage", "coverage of edge cases") and caused false positives.
+_TEST_KEYWORDS = frozenset({"test", "tests", "spec", "specs", "testing"})
+
+# Path segments that mark a file as living in a test/spec tree. Matched
+# against a slash-normalized, lowercased path so Windows backslash paths
+# and nested directories (Jest's __tests__, specs/, testing/) are all caught.
+_TEST_PATH_SEGMENTS = (
+    "/test/", "/tests/", "/spec/", "/specs/", "/testing/", "/__tests__/",
+)
+
+# Floor for the candidate pool depth in hybrid_search. Small caller limits
+# (e.g. limit=10) still gather a pool deep enough for RRF fusion to surface
+# mid-ranked nodes that would otherwise fall out of a shallow limit*3 pool.
+_MIN_CANDIDATE_POOL = 50
+
+# Word-token splitter for query test-orientation detection. Splits on any
+# run of non-letter characters so "test-driven" / "spec.ts" tokenize to
+# ["test", "driven"] / ["spec", "ts"] instead of staying glued together.
+_WORD_RE = re.compile(r"[^a-z]+")
+
+
 # ---------------------------------------------------------------------------
 # FTS5 index management
 # ---------------------------------------------------------------------------
@@ -387,12 +411,12 @@ def hybrid_search(
     # because those operate on the FTS virtual table or need raw Row
     # access for batch-fetch performance.  This is documented coupling.
     conn = store._conn
-    # Fetch extra to allow for filtering and boosting. Floor at 50 so that
-    # small caller limits (e.g. limit=10) still gather a candidate pool deep
-    # enough for RRF fusion to surface mid-ranked nodes — without the floor a
-    # node ranked ~6 in each channel could fall out of the merged top-K purely
-    # because the per-channel pool (limit*3=30) was too shallow.
-    fetch_limit = max(limit * 3, 50)
+    # Fetch extra to allow for filtering and boosting. Floor at
+    # _MIN_CANDIDATE_POOL so that small caller limits (e.g. limit=10) still
+    # gather a candidate pool deep enough for RRF fusion to surface mid-ranked
+    # nodes — without the floor a node ranked ~6 in each channel could fall out
+    # of the merged top-K purely because the per-channel pool was too shallow.
+    fetch_limit = max(limit * 3, _MIN_CANDIDATE_POOL)
 
     # ------ Phase 1: Gather ranked lists ------
     fts_results: list[tuple[int, float]] = []
@@ -445,8 +469,9 @@ def hybrid_search(
     # Apply boosting
     # Dampen Test nodes unless the query explicitly asks for tests — prevents
     # test-heavy repos (express: 98% test nodes) from drowning source results.
-    _TEST_KEYWORDS = {"test", "tests", "spec", "specs", "testing", "coverage"}
-    query_wants_tests = bool(_TEST_KEYWORDS & set(query.lower().split()))
+    # Tokenize on non-letter runs so "test-driven" / "spec.ts" still match.
+    query_tokens = set(_WORD_RE.split(query.lower()))
+    query_wants_tests = bool(_TEST_KEYWORDS & query_tokens)
 
     boosted: list[tuple[int, float]] = []
     for node_id, score in merged:
@@ -465,8 +490,11 @@ def hybrid_search(
         # Dampen non-Test functions that live in test directories — these are
         # helper/fixture functions (e.g. createApp) that pollute source search.
         if not query_wants_tests and node_kind != "Test" and file_path:
-            fp_lower = file_path.lower()
-            if "/test/" in fp_lower or "/tests/" in fp_lower or "/spec/" in fp_lower:
+            # Normalize backslashes so Windows paths match too, and pad with
+            # leading/trailing slashes so top-level dirs (e.g. "tests/x.py")
+            # match the "/tests/" segment patterns.
+            fp_lower = "/" + file_path.lower().replace("\\", "/") + "/"
+            if any(seg in fp_lower for seg in _TEST_PATH_SEGMENTS):
                 boost *= 0.4
         if node_kind in kind_boosts:
             boost *= kind_boosts[node_kind]
