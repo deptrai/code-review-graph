@@ -25,15 +25,18 @@ def get_file_lineage_func(
         Dict with commit_count, churn_90d, authors, co_changed_files,
         last_commit_sha, last_commit_at. Empty dict if not indexed.
     """
-    store = _get_store(repo_root)
-    lineage = store.get_file_lineage(file_path)
-    if not lineage:
-        return {
-            "file_path": file_path,
-            "indexed": False,
-            "message": "No lineage data. Run build_lineage_index_tool first.",
-        }
-    return {**lineage, "indexed": True}
+    store, _ = _get_store(repo_root)
+    try:
+        lineage = store.get_file_lineage(file_path)
+        if not lineage:
+            return {
+                "file_path": file_path,
+                "indexed": False,
+                "message": "No lineage data. Run build_lineage_index_tool first.",
+            }
+        return {**lineage, "indexed": True}
+    finally:
+        store.close()
 
 
 def get_hotspot_files_func(
@@ -52,18 +55,21 @@ def get_hotspot_files_func(
     Returns:
         Dict with hotspots list sorted by churn_90d descending.
     """
-    store = _get_store(repo_root)
-    hotspots = store.get_hotspot_files(limit=limit)
-    if not hotspots:
+    store, _ = _get_store(repo_root)
+    try:
+        hotspots = store.get_hotspot_files(limit=limit)
+        if not hotspots:
+            return {
+                "hotspots": [],
+                "message": "No lineage data. Run build_lineage_index_tool first.",
+            }
         return {
-            "hotspots": [],
-            "message": "No lineage data. Run build_lineage_index_tool first.",
+            "hotspots": hotspots,
+            "total": len(hotspots),
+            "note": "churn_90d = commits touching this file in last 90 days",
         }
-    return {
-        "hotspots": hotspots,
-        "total": len(hotspots),
-        "note": "churn_90d = commits touching this file in last 90 days",
-    }
+    finally:
+        store.close()
 
 
 def build_lineage_index_func(
@@ -87,7 +93,7 @@ def build_lineage_index_func(
     from concurrent.futures import ThreadPoolExecutor
 
     resolved_root = Path(repo_root).resolve() if repo_root else Path.cwd().resolve()
-    store = _get_store(repo_root)
+    store, _ = _get_store(repo_root)
 
     try:
         from ..lineage import build_lineage_index
@@ -104,3 +110,5 @@ def build_lineage_index_func(
             "error": str(e),
             "message": "Failed to build lineage index",
         }
+    finally:
+        store.close()
