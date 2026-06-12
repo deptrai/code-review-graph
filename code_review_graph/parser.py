@@ -6643,9 +6643,38 @@ class CodeParser:
                     break
                 callee = inner
             text = callee.text.decode("utf-8", errors="replace").strip()
-            if text and len(text) <= 256 and "\n" not in text:
-                return text
+            if not (text and len(text) <= 256 and "\n" not in text):
+                return None
+            # Erlang remote call: ``module:function(...)`` parses as a
+            # ``remote`` node whose first child is a ``remote_module``
+            # (carrying the module ``atom``) followed by this ``call`` node.
+            # Prepend the module so the callee keeps its qualified form
+            # (``lists:map``) instead of collapsing to the bare ``map``.
+            module = self._erlang_remote_module(node)
+            if module is not None:
+                return f"{module}:{text}"
+            return text
+        return None
+
+    @staticmethod
+    def _erlang_remote_module(call_node) -> Optional[str]:
+        """Return the module qualifier for an Erlang remote ``call`` node.
+
+        A remote call ``mod:fun(...)`` parses as ``remote(remote_module(atom
+        ':'), call(...))``.  Given the inner ``call`` node, walk up to the
+        ``remote`` parent and read the module ``atom`` from its
+        ``remote_module`` child.  Returns ``None`` for ordinary local calls.
+        """
+        parent = call_node.parent
+        if parent is None or parent.type != "remote":
             return None
+        for child in parent.children:
+            if child.type == "remote_module":
+                for sub in child.children:
+                    if sub.type == "atom":
+                        text = sub.text.decode("utf-8", errors="replace").strip()
+                        return text or None
+                return None
         return None
 
     def _get_jsx_component_reference(self, node) -> Optional[tuple[Optional[str], str]]:

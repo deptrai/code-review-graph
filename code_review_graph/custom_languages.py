@@ -300,9 +300,16 @@ def _validate_entry(
 
     # Probe the grammar last (it is the expensive check).  Parser objects
     # themselves are created lazily by CodeParser._get_parser.
+    #
+    # Catch broadly: tree_sitter_language_pack raises an assortment of error
+    # types for an unknown/undownloadable grammar depending on its version —
+    # standard exceptions (LookupError, ValueError, ImportError, OSError) on
+    # older releases, and a native ``_native.Error`` (subclassing only
+    # ``Exception``) on newer ones. An unavailable grammar must always be
+    # skipped gracefully rather than aborting the whole config load.
     try:
         tslp.get_language(grammar)  # type: ignore[arg-type]
-    except (LookupError, ValueError, ImportError, OSError) as exc:
+    except Exception as exc:  # noqa: BLE001 — see comment above
         logger.warning(
             "%s: custom language %r: grammar %r is not available in "
             "tree_sitter_language_pack (%s) — skipping",
