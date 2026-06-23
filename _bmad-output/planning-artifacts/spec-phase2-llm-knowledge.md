@@ -1,0 +1,1 @@
+../../docs/specs/SPEC-phase2-llm-knowledge.md
